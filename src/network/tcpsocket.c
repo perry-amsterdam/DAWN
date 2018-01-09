@@ -119,7 +119,7 @@ int run_server(int port) {
 }
 
 int add_tcp_conncection(char *ipv4, int port) {
-    int sockfd;
+    //int sockfd;
     struct sockaddr_in serv_addr;
 
     char port_str[12];
@@ -136,13 +136,14 @@ int add_tcp_conncection(char *ipv4, int port) {
         return 0;
     }
 
-    sockfd = usock(USOCK_TCP | USOCK_NONBLOCK, ipv4, port_str);
-
     struct network_con_s tmp =
             {
-                    .sock_addr = serv_addr,
-                    .sockfd = sockfd
+                    .sock_addr = serv_addr
+                    //.sockfd = sockfd
             };
+    tmp.fd.fd = usock(USOCK_TCP | USOCK_NONBLOCK, ipv4, port_str);
+    //uloop_fd_add(&tmp.fd, ULOOP_WRITE | ULOOP_EDGE_TRIGGER);
+    ustream_fd_init(&tmp.stream, tmp.fd.fd);
 
     insert_to_tcp_array(tmp);
 
@@ -168,7 +169,10 @@ void send_tcp(char *msg) {
     printf("SENDING TCP!\n");
     pthread_mutex_lock(&tcp_array_mutex);
     for (int i = 0; i <= tcp_entry_last; i++) {
-        if (send(network_array[i].sockfd, msg, strlen(msg), 0) < 0) {
+
+        //ustream_write(&network_array[i].stream.stream, msg, strlen(msg), 0);
+
+        /*if (send(network_array[i].sockfd, msg, strlen(msg), 0) < 0) {
             close(network_array->sockfd);
             printf("Removing bad TCP connection!\n");
             for (int j = i; j < tcp_entry_last; j++) {
@@ -178,7 +182,7 @@ void send_tcp(char *msg) {
             if (tcp_entry_last > -1) {
                 tcp_entry_last--;
             }
-        }
+        }*/
     }
     pthread_mutex_unlock(&tcp_array_mutex);
 }
