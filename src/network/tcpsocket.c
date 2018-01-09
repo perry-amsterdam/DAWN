@@ -61,7 +61,7 @@ static void client_notify_state(struct ustream *s)
 
 
 static void client_read_cb(struct ustream *s, int bytes) {
-    char *str;
+    /*char *str;
     int len;
 
     do {
@@ -78,7 +78,7 @@ static void client_read_cb(struct ustream *s, int bytes) {
     if (s->w.data_bytes > 256 && !ustream_read_blocked(s)) {
         fprintf(stderr, "Block read, bytes: %d\n", s->w.data_bytes);
         ustream_set_read_blocked(s, true);
-    }
+    }*/
 }
 
 static void client_notify_connected(struct ustream_ssl *ssl)
@@ -176,7 +176,7 @@ int add_tcp_conncection(char *ipv4, int port) {
     tmp.fd.fd = usock(USOCK_TCP | USOCK_NONBLOCK, ipv4, port_str);
     ustream_fd_init(&tmp.stream, tmp.fd.fd);
     ustream_ssl_init(&tmp.ssl, &tmp.stream.stream, ctx_client_ssl, 0);
-    ustream_ssl_set_peer_cn(&tmp.ssl, "bla");
+    //ustream_ssl_set_peer_cn(&tmp.ssl, "ca@trustme.dom");
 
     insert_to_tcp_array(tmp);
 
@@ -204,7 +204,7 @@ void send_tcp(char *msg) {
     pthread_mutex_lock(&tcp_array_mutex);
     for (int i = 0; i <= tcp_entry_last; i++) {
 
-        ustream_write(&network_array[i].stream.stream, msg, strlen(msg), 0);
+        //ustream_write(&network_array[i].stream.stream, msg, strlen(msg), 0);
 
         /*if (send(network_array[i].sockfd, msg, strlen(msg), 0) < 0) {
             close(network_array->sockfd);
