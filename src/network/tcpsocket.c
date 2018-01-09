@@ -150,6 +150,7 @@ int run_server(int port) {
 
 int add_tcp_conncection(char *ipv4, int port) {
     //int sockfd;
+    SSL_CTX_set_cert_verify_callback(CTX, always_true_callback);
     struct sockaddr_in serv_addr;
 
     char port_str[12];
@@ -174,7 +175,7 @@ int add_tcp_conncection(char *ipv4, int port) {
     tmp.fd.fd = usock(USOCK_TCP | USOCK_NONBLOCK, ipv4, port_str);
     ustream_fd_init(&tmp.stream, tmp.fd.fd);
     ustream_ssl_init(&tmp.ssl, &tmp.stream.stream, ctx_client_ssl, 0);
-    ustream_ssl_set_peer_cn(&tmp.ssl, "10.0.0.39");
+    //ustream_ssl_set_peer_cn(&tmp.ssl, "0.0.0.0");
 
     insert_to_tcp_array(tmp);
 
@@ -182,6 +183,12 @@ int add_tcp_conncection(char *ipv4, int port) {
 
     return 0;
 }
+
+static int always_true_callback(X509_STORE_CTX *ctx, void *arg)
+{
+    return 1;
+}
+
 
 int insert_to_tcp_array(struct network_con_s entry) {
     pthread_mutex_lock(&tcp_array_mutex);
