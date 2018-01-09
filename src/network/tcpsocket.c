@@ -147,6 +147,24 @@ int run_server(int port) {
     return 0;
 }
 
+static void example_connect_cb(struct uloop_fd *f, unsigned int events)
+{
+    fprintf(stderr, "Connection established\n");
+
+    pthread_mutex_lock(&tcp_array_mutex);
+    for (int i = 0; i <= tcp_entry_last; i++) {
+        if(network_array[i].fd.fd == f->fd)
+        {
+            uloop_fd_delete(&network_array[i].fd);
+            ustream_fd_init(&network_array[i].stream, network_array[i].fd.fd);
+            ustream_ssl_init(&network_array[i].ssl, &network_array[i].stream.stream, ctx_client_ssl, 0);
+            ustream_ssl_set_peer_cn(&network_array[i].ssl, "10.0.0.39");
+        }
+    }
+    pthread_mutex_unlock(&tcp_array_mutex);
+}
+
+
 int add_tcp_conncection(char *ipv4, int port) {
     //int sockfd;
     struct sockaddr_in serv_addr;
@@ -171,13 +189,9 @@ int add_tcp_conncection(char *ipv4, int port) {
                     //.sockfd = sockfd
             };
     tmp.fd.fd = usock(USOCK_TCP | USOCK_NONBLOCK, ipv4, port_str);
-    //tmp.fd.cb = example_connect_cb;
-    //uloop_fd_add(&tmp.fd, ULOOP_WRITE | ULOOP_EDGE_TRIGGER);
-    //ustream_fd_init(&tmp.stream, tmp.fd.fd);
-
-    //ustream_ssl_init(&tmp.ssl, &tmp.stream.stream, ctx_client_ssl, 0);
-    //ustream_ssl_set_peer_cn(&tmp.ssl, ipv4);
-
+    ustream_fd_init(&tmp.stream, tmp.fd.fd);
+    ustream_ssl_init(&tmp.ssl, &tmp.stream.stream, ctx_client_ssl, 0);
+    ustream_ssl_set_peer_cn(&tmp.ssl, "10.0.0.39");
 
     insert_to_tcp_array(tmp);
 

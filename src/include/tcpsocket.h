@@ -14,7 +14,6 @@ struct network_con_s {
     struct ustream_fd stream;
     struct ustream_ssl ssl;
     struct uloop_fd fd;
-
 };
 
 void *run_tcp_socket(void *arg);
