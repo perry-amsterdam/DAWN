@@ -170,7 +170,7 @@ void send_tcp(char *msg) {
     pthread_mutex_lock(&tcp_array_mutex);
     for (int i = 0; i <= tcp_entry_last; i++) {
 
-        //ustream_write(&network_array[i].stream.stream, msg, strlen(msg), 0);
+        ustream_write(&network_array[i].stream.stream, msg, strlen(msg), 0);
 
         /*if (send(network_array[i].sockfd, msg, strlen(msg), 0) < 0) {
             close(network_array->sockfd);
