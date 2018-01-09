@@ -9,6 +9,9 @@
 #include "ubus.h"
 #include <arpa/inet.h>
 
+static struct ustream_ssl_ctx *ctx_ssl;
+static struct ustream_ssl_ctx *ctx_client_ssl;
+
 // based on:
 // https://github.com/xfguo/libubox/blob/master/examples/ustream-example.c
 
@@ -27,35 +30,34 @@ struct client {
     struct sockaddr_in sin;
 
     struct ustream_fd s;
+    struct ustream_ssl ssl;
     int ctr;
 };
 
-static void client_close(struct ustream *s) {
-    struct client *cl = container_of(s,
-    struct client, s.stream);
-
+static void client_close(struct client *cl)
+{
     fprintf(stderr, "Connection closed\n");
-    ustream_free(s);
+    ustream_free(&cl->ssl.stream);
+    ustream_free(&cl->s.stream);
     close(cl->s.fd.fd);
     free(cl);
 }
-
 static void client_notify_write(struct ustream *s, int bytes) {
     return;
 }
 
-static void client_notify_state(struct ustream *s) {
-    struct client *cl = container_of(s,
-    struct client, s.stream);
+static void client_notify_state(struct ustream *s)
+{
+    struct client *cl = container_of(s, struct client, ssl.stream);
 
     if (!s->eof)
         return;
 
     fprintf(stderr, "eof!, pending: %d, total: %d\n", s->w.data_bytes, cl->ctr);
     if (!s->w.data_bytes)
-        return client_close(s);
-
+        return client_close(cl);
 }
+
 
 static void client_read_cb(struct ustream *s, int bytes) {
     char *str;
@@ -78,7 +80,21 @@ static void client_read_cb(struct ustream *s, int bytes) {
     }
 }
 
-static void server_cb(struct uloop_fd *fd, unsigned int events) {
+static void client_notify_connected(struct ustream_ssl *ssl)
+{
+    fprintf(stderr, "SSL connection established\n");
+}
+
+static void client_notify_error(struct ustream_ssl *ssl, int error, const char *str)
+{
+    struct client *cl = container_of(ssl, struct client, ssl);
+
+    fprintf(stderr, "SSL connection error(%d): %s\n", error, str);
+    client_close(cl);
+}
+
+static void server_cb(struct uloop_fd *fd, unsigned int events)
+{
     struct client *cl;
     unsigned int sl = sizeof(struct sockaddr_in);
     int sfd;
@@ -93,16 +109,28 @@ static void server_cb(struct uloop_fd *fd, unsigned int events) {
         return;
     }
 
-    cl->s.stream.string_data = 1;
-    cl->s.stream.notify_read = client_read_cb;
-    cl->s.stream.notify_state = client_notify_state;
-    cl->s.stream.notify_write = client_notify_write;
+    cl->ssl.stream.string_data = 1;
+    cl->ssl.stream.notify_read = client_read_cb;
+    cl->ssl.stream.notify_state = client_notify_state;
+    cl->ssl.stream.notify_write = client_notify_write;
+    cl->ssl.notify_connected = client_notify_connected;
+    cl->ssl.notify_error = client_notify_error;
+
     ustream_fd_init(&cl->s, sfd);
+    ustream_ssl_init(&cl->ssl, &cl->s.stream, ctx_ssl, true);
     next_client = NULL;
     fprintf(stderr, "New connection\n");
 }
 
 int run_server(int port) {
+
+    ctx_ssl = ustream_ssl_context_new(true);
+    ustream_ssl_context_set_crt_file(ctx_ssl, "/root/example.crt");
+    ustream_ssl_context_set_key_file(ctx_ssl, "/root/example.key");
+
+
+    ctx_client_ssl = ustream_ssl_context_new(false);
+
     char port_str[12];
     sprintf(port_str, "%d", port);
 
@@ -116,6 +144,35 @@ int run_server(int port) {
     uloop_fd_add(&server, ULOOP_READ);
 
     return 0;
+}
+
+static void example_connect_ssl(int fd)
+{
+    fprintf(stderr, "Starting SSL negnotiation\n");
+
+    ssl.notify_error = client_notify_error;
+    ssl.notify_verify_error = client_notify_verify_error;
+    ssl.notify_connected = client_notify_connected;
+    ssl.stream.notify_read = client_ssl_notify_read;
+    ssl.stream.notify_write = client_ssl_notify_write;
+    ssl.stream.notify_state = client_notify_state;
+
+    ustream_fd_init(&stream, fd);
+    ustream_ssl_init(&ssl, &stream.stream, ctx, false);
+    ustream_ssl_set_peer_cn(&ssl, host);
+}
+
+static void example_connect_cb(struct uloop_fd *f, unsigned int events)
+{
+    if (fd.eof || fd.error) {
+        fprintf(stderr, "Connection failed\n");
+        uloop_end();
+        return;
+    }
+
+    fprintf(stderr, "Connection established\n");
+    uloop_fd_delete(&fd);
+    example_connect_ssl(fd.fd);
 }
 
 int add_tcp_conncection(char *ipv4, int port) {
@@ -142,8 +199,10 @@ int add_tcp_conncection(char *ipv4, int port) {
                     //.sockfd = sockfd
             };
     tmp.fd.fd = usock(USOCK_TCP | USOCK_NONBLOCK, ipv4, port_str);
+    tmp.fd.cb = example_connect_cb;
     //uloop_fd_add(&tmp.fd, ULOOP_WRITE | ULOOP_EDGE_TRIGGER);
     ustream_fd_init(&tmp.stream, tmp.fd.fd);
+
 
     insert_to_tcp_array(tmp);
 
