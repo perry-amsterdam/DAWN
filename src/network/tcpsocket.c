@@ -1,6 +1,7 @@
 #include <libubox/usock.h>
 #include <libubox/ustream.h>
 #include <libubox/uloop.h>
+#include <libubox/ustream-ssl.h>
 #include <netinet/in.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -146,35 +147,6 @@ int run_server(int port) {
     return 0;
 }
 
-static void example_connect_ssl(int fd)
-{
-    fprintf(stderr, "Starting SSL negnotiation\n");
-
-    ssl.notify_error = client_notify_error;
-    ssl.notify_verify_error = client_notify_verify_error;
-    ssl.notify_connected = client_notify_connected;
-    ssl.stream.notify_read = client_ssl_notify_read;
-    ssl.stream.notify_write = client_ssl_notify_write;
-    ssl.stream.notify_state = client_notify_state;
-
-    ustream_fd_init(&stream, fd);
-    ustream_ssl_init(&ssl, &stream.stream, ctx, false);
-    ustream_ssl_set_peer_cn(&ssl, host);
-}
-
-static void example_connect_cb(struct uloop_fd *f, unsigned int events)
-{
-    if (fd.eof || fd.error) {
-        fprintf(stderr, "Connection failed\n");
-        uloop_end();
-        return;
-    }
-
-    fprintf(stderr, "Connection established\n");
-    uloop_fd_delete(&fd);
-    example_connect_ssl(fd.fd);
-}
-
 int add_tcp_conncection(char *ipv4, int port) {
     //int sockfd;
     struct sockaddr_in serv_addr;
@@ -199,9 +171,12 @@ int add_tcp_conncection(char *ipv4, int port) {
                     //.sockfd = sockfd
             };
     tmp.fd.fd = usock(USOCK_TCP | USOCK_NONBLOCK, ipv4, port_str);
-    tmp.fd.cb = example_connect_cb;
+    //tmp.fd.cb = example_connect_cb;
     //uloop_fd_add(&tmp.fd, ULOOP_WRITE | ULOOP_EDGE_TRIGGER);
     ustream_fd_init(&tmp.stream, tmp.fd.fd);
+
+    ustream_ssl_init(&tmp.ssl, &tmp.stream.stream, ctx_client_ssl, 0);
+    ustream_ssl_set_peer_cn(&tmp.ssl, ipv4);
 
 
     insert_to_tcp_array(tmp);

@@ -4,6 +4,7 @@
 #include <libubox/usock.h>
 #include <libubox/ustream.h>
 #include <libubox/uloop.h>
+#include <libubox/ustream-ssl.h>
 #include <netinet/in.h>
 #include <pthread.h>
 
@@ -11,6 +12,7 @@ struct network_con_s {
     //int sockfd;
     struct sockaddr_in sock_addr;
     struct ustream_fd stream;
+    struct ustream_ssl ssl;
     struct uloop_fd fd;
 
 };
