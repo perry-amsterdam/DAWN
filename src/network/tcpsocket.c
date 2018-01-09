@@ -127,12 +127,12 @@ int run_server(int port) {
 
 
     ctx_ssl = ustream_ssl_context_new(true);
-    ustream_ssl_context_add_ca_crt_file(ctx_client_ssl, "/root/example.crt");
     ustream_ssl_context_set_crt_file(ctx_ssl, "/root/example.crt");
     ustream_ssl_context_set_key_file(ctx_ssl, "/root/example.key");
 
 
     ctx_client_ssl = ustream_ssl_context_new(false);
+    ustream_ssl_context_add_ca_crt_file(ctx_client_ssl, "/root/example.crt");
 
     char port_str[12];
     sprintf(port_str, "%d", port);
@@ -176,7 +176,7 @@ int add_tcp_conncection(char *ipv4, int port) {
     tmp.fd.fd = usock(USOCK_TCP | USOCK_NONBLOCK, ipv4, port_str);
     ustream_fd_init(&tmp.stream, tmp.fd.fd);
     ustream_ssl_init(&tmp.ssl, &tmp.stream.stream, ctx_client_ssl, 0);
-    //ustream_ssl_set_peer_cn(&tmp.ssl, "0.0.0.0");
+    //ustream_ssl_set_peer_cn(&tmp.ssl, ipv4);
 
     insert_to_tcp_array(tmp);
 
