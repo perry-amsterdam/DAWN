@@ -176,7 +176,7 @@ int add_tcp_conncection(char *ipv4, int port) {
     tmp.fd.fd = usock(USOCK_TCP | USOCK_NONBLOCK, ipv4, port_str);
     ustream_fd_init(&tmp.stream, tmp.fd.fd);
     ustream_ssl_init(&tmp.ssl, &tmp.stream.stream, ctx_client_ssl, 0);
-    //ustream_ssl_set_peer_cn(&tmp.ssl, ipv4);
+    ustream_ssl_set_peer_cn(&tmp.ssl, "bla");
 
     insert_to_tcp_array(tmp);
 
