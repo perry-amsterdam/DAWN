@@ -175,8 +175,8 @@ int add_tcp_conncection(char *ipv4, int port) {
     //uloop_fd_add(&tmp.fd, ULOOP_WRITE | ULOOP_EDGE_TRIGGER);
     ustream_fd_init(&tmp.stream, tmp.fd.fd);
 
-    ustream_ssl_init(&tmp.ssl, &tmp.stream.stream, ctx_client_ssl, 0);
-    ustream_ssl_set_peer_cn(&tmp.ssl, ipv4);
+    //ustream_ssl_init(&tmp.ssl, &tmp.stream.stream, ctx_client_ssl, 0);
+    //ustream_ssl_set_peer_cn(&tmp.ssl, ipv4);
 
 
     insert_to_tcp_array(tmp);
