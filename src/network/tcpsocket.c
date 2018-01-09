@@ -150,7 +150,6 @@ int run_server(int port) {
 
 int add_tcp_conncection(char *ipv4, int port) {
     //int sockfd;
-    SSL_CTX_set_cert_verify_callback(CTX, always_true_callback);
     struct sockaddr_in serv_addr;
 
     char port_str[12];
