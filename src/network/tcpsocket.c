@@ -125,7 +125,9 @@ static void server_cb(struct uloop_fd *fd, unsigned int events)
 
 int run_server(int port) {
 
+
     ctx_ssl = ustream_ssl_context_new(true);
+    ustream_ssl_context_add_ca_crt_file(ctx_client_ssl, "/root/example.crt");
     ustream_ssl_context_set_crt_file(ctx_ssl, "/root/example.crt");
     ustream_ssl_context_set_key_file(ctx_ssl, "/root/example.key");
 
@@ -181,11 +183,6 @@ int add_tcp_conncection(char *ipv4, int port) {
     printf("NEW TCP CONNECTION!!! to %s:%d\n", ipv4, port);
 
     return 0;
-}
-
-static int always_true_callback(X509_STORE_CTX *ctx, void *arg)
-{
-    return 1;
 }
 
 
