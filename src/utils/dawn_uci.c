@@ -163,3 +163,41 @@ int uci_clear() {
     }
     return 1;
 }
+
+int uci_set_network(char* uci_cmd)
+{
+    printf("TRY TO DO: %s\n", uci_cmd);
+
+    //struct uci_element *e;
+    struct uci_ptr ptr;
+    int ret = UCI_OK;
+    struct uci_context *ctx;
+
+    ctx = uci_alloc_context();
+    ctx->flags |= UCI_FLAG_STRICT;
+
+    printf("Try lookup!!\n");
+    if (uci_lookup_ptr(ctx, &ptr, uci_cmd, 1) != UCI_OK) {
+        return 1;
+    }
+    printf("UCI LOOKUP SUCCESSFULL!\n");
+
+    printf("SETTING PTR!\n");
+    //e = ptr.last;
+    printf("SETTING UCI!\n");
+    ret = uci_set(ctx, &ptr);
+
+    printf("SETTING FINISEHD!\n");
+
+    printf("NOW COMMITING!\n");
+    if (uci_lookup_ptr(ctx, &ptr, "dawn", 1) != UCI_OK) {
+        return 1;
+    }
+    //e = ptr.last;
+
+    if (uci_commit(ctx, &ptr.p, 0) != UCI_OK) {
+        printf("FAILED TO COMMIT!\n");
+    }
+
+    return ret;
+}

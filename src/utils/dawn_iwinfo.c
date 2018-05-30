@@ -21,6 +21,8 @@ int get_bandwidth(const char *ifname, uint8_t *client_addr, float *rx_rate, floa
 
 #define IWINFO_ESSID_MAX_SIZE    32
 
+//TODO: Maybe refactor all this stuff and use ifacename from hostapd struct...
+
 int compare_essid_iwinfo(__uint8_t *bssid_addr, __uint8_t *bssid_addr_to_compare) {
     const struct iwinfo_ops *iw;
 
@@ -102,6 +104,7 @@ int get_bandwidth_iwinfo(__uint8_t *client_addr, float *rx_rate, float *tx_rate)
         }
     }
     closedir(dirp);
+
     return sucess;
 }
 
@@ -157,6 +160,7 @@ int get_rssi_iwinfo(__uint8_t *client_addr) {
         }
     }
     closedir(dirp);
+
     return rssi;
 }
 
@@ -185,8 +189,8 @@ int get_rssi(const char *ifname, uint8_t *client_addr) {
         if (mac_is_equal(client_addr, e->mac))
             return e->signal;
     }
-
     iwinfo_finish();
+
     return INT_MIN;
 }
 
@@ -210,6 +214,7 @@ int get_expected_throughput_iwinfo(__uint8_t *client_addr) {
         }
     }
     closedir(dirp);
+
     return exp_thr;
 }
 
@@ -271,6 +276,7 @@ int get_ssid(const char *ifname, char* ssid) {
 
     memcpy(ssid, buf, (SSID_MAX_LEN) * sizeof(char));
     strcpy(ssid, buf);
+
     return 0;
 }
 
@@ -292,6 +298,7 @@ int get_channel_utilization(const char *ifname, uint64_t *last_channel_time, uin
     if(divisor)
         ret = (int)(dividend * 255 / divisor);
     iwinfo_finish();
+
     return ret;
 }
 
@@ -310,6 +317,7 @@ int support_ht(const char *ifname) {
     uint32_t ht_support_bitmask = (1 << 0) | (1 << 2);
     int ret = htmodes & ht_support_bitmask ? 1 : 0;
     iwinfo_finish();
+
     return ret;
 }
 
@@ -328,5 +336,6 @@ int support_vht(const char *ifname) {
     uint32_t vht_support_bitmask = (1 << 2) | (1 << 2) | (1 << 3) | (1 << 4) | (1 << 5) | (1 << 6);
     int ret = htmodes & vht_support_bitmask ? 1 : 0;
     iwinfo_finish();
+
     return ret;
 }

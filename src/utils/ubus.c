@@ -620,6 +620,9 @@ int handle_network_msg(char *msg) {
         handle_set_probe(data_buf.head);
     } else if (strncmp(method, "addmac", 5) == 0) {
         parse_add_mac_to_file(data_buf.head);
+    } else if (strncmp(method, "uci", 3) == 0) {
+        //parse_add_mac_to_file(data_buf.head);
+        // UCI!!!
     }
 
     return 0;
@@ -776,8 +779,16 @@ int dawn_init_ubus(const char *ubus_socket, const char *hostapd_dir) {
 
     ubus_add_uloop(ctx);
 
+    char* bla = "dawn.@metric[0].ht_support=1000";
+    char blabuffer[100];
+    strcpy(blabuffer,bla);
+
+    uci_set_network(blabuffer);
+
     // set dawn metric
     dawn_metric = uci_get_dawn_metric();
+
+    //uci_init();
 
     uloop_timeout_add(&hostapd_timer);
 
