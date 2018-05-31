@@ -1,6 +1,7 @@
 #include <uci.h>
 #include <stdlib.h>
 #include <datastorage.h>
+#include <stdbool.h>
 
 #include "dawn_uci.h"
 
@@ -162,6 +163,87 @@ int uci_clear() {
         uci_free_context(uci_ctx);
     }
     return 1;
+}
+
+static void uci_print_value(FILE *f, const char *v)
+{
+    fprintf(f, "'");
+    while (*v) {
+        if (*v != '\'')
+            fputc(*v, f);
+        else
+            fprintf(f, "'\\''");
+        v++;
+    }
+    fprintf(f, "'");
+}
+
+static void uci_show_value(struct uci_option *o, bool quote)
+{
+    struct uci_element *e;
+    bool sep = false;
+    char *space;
+
+    switch(o->type) {
+        case UCI_TYPE_STRING:
+            if (quote)
+                uci_print_value(stdout, o->v.string);
+            else
+                printf("%s", o->v.string);
+            printf("\n");
+            break;
+        case UCI_TYPE_LIST:
+            uci_foreach_element(&o->v.list, e) {
+        printf("%s", (sep ? delimiter : ""));
+        space = strpbrk(e->name, " \t\r\n");
+        if (!space && !quote)
+            printf("%s", e->name);
+        else
+            uci_print_value(stdout, e->name);
+        sep = true;
+    }
+            printf("\n");
+            break;
+        default:
+            printf("<unknown>\n");
+            break;
+    }
+}
+
+static void uci_show_option(struct uci_option *o, bool quote)
+{
+    printf("%s.%s.%s=",
+           o->section->package->e.name,
+           (cur_section_ref ? cur_section_ref : o->section->e.name),
+           o->e.name);
+    uci_show_value(o, quote);
+}
+
+static void uci_show_section(struct uci_section *s)
+{
+    struct uci_element *e;
+    const char *cname;
+    const char *sname;
+
+    cname = s->package->e.name;
+    sname = (cur_section_ref ? cur_section_ref : s->e.name);
+    printf("%s.%s=%s\n", cname, sname, s->type);
+    uci_foreach_element(&s->options, e) {
+        uci_show_option(uci_to_option(e), true);
+    }
+}
+
+static void uci_show_package(struct uci_package *p)
+{
+    struct uci_element *e;
+
+    uci_reset_typelist();
+    uci_foreach_element( &p->sections, e) {
+        struct uci_section *s = uci_to_section(e);
+        cur_section_ref = uci_lookup_section_ref(s);
+        uci_show_section(s);
+    }
+    uci_reset_typelist();
 }
 
 int uci_set_network(char* uci_cmd)
