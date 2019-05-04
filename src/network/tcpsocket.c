@@ -151,7 +151,7 @@ int run_server(int port) {
 }
 
 static void client_not_be_used_read_cb(struct ustream *s, int bytes) {
-    size_t len;
+    int len;
     char buf[2048];
 
     len = ustream_read(s, buf, sizeof(buf));
