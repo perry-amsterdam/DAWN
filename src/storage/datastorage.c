@@ -210,6 +210,13 @@ int build_network_overview(struct blob_buf *b) {
 
                 sprintf(client_mac_buf, MACSTR, MAC2STR(client_array[k].client_addr));
                 client_list = blobmsg_open_table(b, client_mac_buf);
+                if(strlen(client_array[k].signature) != 0)
+                {
+                    char *s;
+                    s = blobmsg_alloc_string_buffer(b, "signature", 1024);
+                    sprintf(s, "%s", client_array[k].signature);
+                    blobmsg_add_string_buffer(b);
+                }
                 blobmsg_add_u32(b, "freq", client_array[k].freq);
                 blobmsg_add_u8(b, "ht", client_array[k].ht);
                 blobmsg_add_u8(b, "vht", client_array[k].vht);

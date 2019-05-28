@@ -171,6 +171,7 @@ static const struct blobmsg_policy client_table_policy[__CLIENT_TABLE_MAX] = {
 };
 
 enum {
+    CLIENT_SIGNATURE,
     CLIENT_AUTH,
     CLIENT_ASSOC,
     CLIENT_AUTHORIZED,
@@ -186,6 +187,7 @@ enum {
 };
 
 static const struct blobmsg_policy client_policy[__CLIENT_MAX] = {
+        [CLIENT_SIGNATURE] = {.name = "signature", .type = BLOBMSG_TYPE_STRING},
         [CLIENT_AUTH] = {.name = "auth", .type = BLOBMSG_TYPE_INT8},
         [CLIENT_ASSOC] = {.name = "assoc", .type = BLOBMSG_TYPE_INT8},
         [CLIENT_AUTHORIZED] = {.name = "authorized", .type = BLOBMSG_TYPE_INT8},
@@ -732,6 +734,14 @@ dump_client(struct blob_attr **tb, uint8_t client_addr[], const char *bssid_addr
     if (tb[CLIENT_AID]) {
         client_entry.aid = blobmsg_get_u32(tb[CLIENT_AID]);
     }
+
+    // copy signature
+    if (tb[CLIENT_SIGNATURE]) {
+        memcpy(client_entry.signature, blobmsg_data(tb[CLIENT_SIGNATURE]), SIGNATURE_LEN * sizeof(char));
+    } else
+    {
+        memset(client_entry.signature, 0, 1024);
+    }    
 
     insert_client_to_array(client_entry);
 }

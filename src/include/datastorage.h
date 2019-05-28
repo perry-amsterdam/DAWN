@@ -166,10 +166,14 @@ void uloop_add_data_cbs();
 
 /* AP, Client */
 
+// blobmsg_alloc_string_buffer(&b, "signature", 1024);
+#define SIGNATURE_LEN 1024
+
 // ---------------- Structs ----------------
 typedef struct client_s {
     uint8_t bssid_addr[ETH_ALEN];
     uint8_t client_addr[ETH_ALEN];
+    char signature[SIGNATURE_LEN];
     uint8_t ht_supported;
     uint8_t vht_supported;
     uint32_t freq;
