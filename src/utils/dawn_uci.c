@@ -33,6 +33,7 @@ struct time_config_s uci_get_time_config() {
             ret.update_tcp_con = uci_lookup_option_int(uci_ctx, s, "update_tcp_con");
             ret.denied_req_threshold = uci_lookup_option_int(uci_ctx, s, "denied_req_threshold");
             ret.update_chan_util = uci_lookup_option_int(uci_ctx, s, "update_chan_util");
+            ret.update_beacon_reports = uci_lookup_option_int(uci_ctx, s, "update_beacon_reports");
             return ret;
         }
     }

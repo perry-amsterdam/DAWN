@@ -34,12 +34,15 @@ static struct blob_buf b_domain;
 static struct blob_buf b_notify;
 static struct blob_buf b_clients;
 static struct blob_buf b_umdns;
+static struct blob_buf b_beacon;
 
 void update_clients(struct uloop_timeout *t);
 
 void update_tcp_connections(struct uloop_timeout *t);
 
 void update_channel_utilization(struct uloop_timeout *t);
+
+void update_beacon_reports(struct uloop_timeout *t);
 
 struct uloop_timeout client_timer = {
         .cb = update_clients
@@ -52,6 +55,9 @@ struct uloop_timeout umdns_timer = {
 };
 struct uloop_timeout channel_utilization_timer = {
         .cb = update_channel_utilization
+};
+struct uloop_timeout beacon_reports_timer = {
+        .cb = update_beacon_reports
 };
 
 #define MAX_HOSTAPD_SOCKETS 10
@@ -139,6 +145,35 @@ static const struct blobmsg_policy prob_policy[__PROB_MAX] = {
         [PROB_FREQ] = {.name = "freq", .type = BLOBMSG_TYPE_INT32},
         [PROB_HT_CAPABILITIES] = {.name = "ht_capabilities", .type = BLOBMSG_TYPE_TABLE},
         [PROB_VHT_CAPABILITIES] = {.name = "vht_capabilities", .type = BLOBMSG_TYPE_TABLE},
+};
+
+enum {
+    BEACON_REP_ADDR,
+    BEACON_REP_OP_CLASS,
+    BEACON_REP_CHANNEL,
+    BEACON_REP_START_TIME,
+    BEACON_REP_DURATION,
+    BEACON_REP_REPORT_INFO,
+    BEACON_REP_RCPI,
+    BEACON_REP_RSNI,
+    BEACON_REP_BSSID,
+    BEACON_REP_ANTENNA_ID,
+    BEACON_REP_PARENT_TSF,
+    __BEACON_REP_MAX,
+};
+
+static const struct blobmsg_policy beacon_rep_policy[__BEACON_REP_MAX] = {
+        [BEACON_REP_ADDR] = {.name = "address", .type = BLOBMSG_TYPE_STRING},
+        [BEACON_REP_OP_CLASS] = {.name = "op-class", .type = BLOBMSG_TYPE_INT16},
+        [BEACON_REP_CHANNEL] = {.name = "channel", .type = BLOBMSG_TYPE_INT64},
+        [BEACON_REP_START_TIME] = {.name = "start-time", .type = BLOBMSG_TYPE_INT32},
+        [BEACON_REP_DURATION] = {.name = "duration", .type = BLOBMSG_TYPE_INT16},
+        [BEACON_REP_REPORT_INFO] = {.name = "report-info", .type = BLOBMSG_TYPE_INT16},
+        [BEACON_REP_RCPI] = {.name = "rcpi", .type = BLOBMSG_TYPE_INT16},
+        [BEACON_REP_RSNI] = {.name = "rsni", .type = BLOBMSG_TYPE_INT16},
+        [BEACON_REP_BSSID] = {.name = "bssid", .type = BLOBMSG_TYPE_STRING},
+        [BEACON_REP_ANTENNA_ID] = {.name = "antenna-id", .type = BLOBMSG_TYPE_INT16},
+        [BEACON_REP_PARENT_TSF] = {.name = "parent-tsf", .type = BLOBMSG_TYPE_INT16},
 };
 
 enum {
@@ -260,6 +295,8 @@ void subscribe_to_new_interfaces(const char *hostapd_sock_path);
 bool subscriber_to_interface(const char *ifname);
 
 bool subscribe(struct hostapd_sock_entry *hostapd_entry);
+
+int parse_to_beacon_rep(struct blob_attr *msg, probe_entry *beacon_rep);
 
 void add_client_update_timer(time_t time) {
     uloop_timeout_set(&client_timer, time);
@@ -388,6 +425,47 @@ int parse_to_probe_req(struct blob_attr *msg, probe_entry *prob_req) {
     return 0;
 }
 
+int parse_to_beacon_rep(struct blob_attr *msg, probe_entry *beacon_rep) {
+    struct blob_attr *tb[__BEACON_REP_MAX];
+
+    blobmsg_parse(beacon_rep_policy, __BEACON_REP_MAX, tb, blob_data(msg), blob_len(msg));
+
+    if (hwaddr_aton(blobmsg_data(tb[BEACON_REP_BSSID]), beacon_rep->bssid_addr))
+        return UBUS_STATUS_INVALID_ARGUMENT;
+
+    ap ap_entry_rep = ap_array_get_ap(beacon_rep->bssid_addr);
+
+    // no client from network!!
+    if (!mac_is_equal(ap_entry_rep.bssid_addr, beacon_rep->bssid_addr)) {
+        return 0;
+    }
+
+    if (hwaddr_aton(blobmsg_data(tb[BEACON_REP_ADDR]), beacon_rep->client_addr))
+        return UBUS_STATUS_INVALID_ARGUMENT;
+
+    int rcpi = blobmsg_get_u16(tb[BEACON_REP_RCPI]);
+    int rsni = blobmsg_get_u16(tb[BEACON_REP_RSNI]);
+
+    // HACKY WORKAROUND!
+    printf("Try update rssi for beacon report!\n");
+    if(!probe_array_update_rcpi_rsni(beacon_rep->bssid_addr, beacon_rep->client_addr, rcpi, rsni, false))
+    {
+        printf("Beacon: No Probe Entry Existing!\n");
+        beacon_rep->counter = dawn_metric.min_probe_count;
+        hwaddr_aton(blobmsg_data(tb[PROB_BSSID_ADDR]), beacon_rep->target_addr);
+        beacon_rep->signal = 0;
+        beacon_rep->freq = ap_entry_rep.freq;
+        beacon_rep->rcpi = rcpi;
+        beacon_rep->rsni = rsni;
+
+        beacon_rep->ht_capabilities = false; // that is very problematic!!!
+        beacon_rep->vht_capabilities = false; // that is very problematic!!!
+        printf("Inserting to array!\n");
+        insert_to_array(*beacon_rep, false, false);
+    }
+    return 0;
+}
+
 static int handle_auth_req(struct blob_attr *msg) {
 
     print_probe_array();
@@ -482,6 +560,18 @@ static int handle_probe_req(struct blob_attr *msg) {
     return WLAN_STATUS_SUCCESS;
 }
 
+static int handle_beacon_rep(struct blob_attr *msg) {
+    probe_entry beacon_rep;
+
+    if (parse_to_beacon_rep(msg, &beacon_rep) == 0) {
+        printf("Insterting beacon Report!\n");
+        // insert_to_array(beacon_rep, 1);
+        printf("Sending via network!\n");
+        send_blob_attr_via_network(msg, "beacon-report");
+    }
+    return 0;
+}
+
 static int handle_deauth_req(struct blob_attr *msg) {
 
     hostapd_notify_entry notify_req;
@@ -549,7 +639,7 @@ int handle_network_msg(char *msg) {
     if (strncmp(method, "probe", 5) == 0) {
         probe_entry entry;
         if (parse_to_probe_req(data_buf.head, &entry) == 0) {
-            insert_to_array(entry, 0);
+            insert_to_array(entry, 0, true); // use 802.11k values
         }
     } else if (strncmp(method, "clients", 5) == 0) {
         parse_to_clients(data_buf.head, 0, 0);
@@ -566,6 +656,10 @@ int handle_network_msg(char *msg) {
     } else if (strncmp(method, "uci", 2) == 0) {
         printf("HANDLING UCI!\n");
         handle_uci_config(data_buf.head);
+    } else if (strncmp(method, "beacon-report", 12) == 0) {
+        printf("HANDLING BEACON REPORT!\n");
+        probe_entry entry; // for now just stay at probe entry stuff...
+        parse_to_beacon_rep(data_buf.head, &entry);
     } else
     {
         printf("No method fonud for: %s\n", method);
@@ -638,6 +732,9 @@ static int hostapd_notify(struct ubus_context *ctx, struct ubus_object *obj,
     } else if (strncmp(method, "deauth", 6) == 0) {
         send_blob_attr_via_network(b_notify.head, "deauth");
         return handle_deauth_req(b_notify.head);
+    } else if (strncmp(method, "beacon-report", 12) == 0) {
+        printf("HANDLING BEACON REPORT!\n");
+        return handle_beacon_rep(b_notify.head);
     }
     return 0;
 }
@@ -668,6 +765,9 @@ int dawn_init_ubus(const char *ubus_socket, const char *hostapd_dir) {
     uloop_timeout_add(&client_timer);
 
     uloop_timeout_add(&channel_utilization_timer);
+
+    // request beacon reports
+    uloop_timeout_add(&beacon_reports_timer);
 
     ubus_call_umdns();
 
@@ -938,6 +1038,36 @@ void update_channel_utilization(struct uloop_timeout *t) {
         }
     }
     uloop_timeout_set(&channel_utilization_timer, timeout_config.update_chan_util * 1000);
+}
+
+void ubus_send_beacon_report(uint8_t client[], int id)
+{
+    printf("Crafting Beacon Report\n");
+    int timeout = 1;
+    blob_buf_init(&b_beacon, 0);
+    blobmsg_add_macaddr(&b_beacon, "addr", client);
+    blobmsg_add_u32(&b_beacon, "op_class", 0);
+    blobmsg_add_u32(&b_beacon, "channel", 0);
+    blobmsg_add_u32(&b_beacon, "duration", 0);
+    blobmsg_add_u32(&b_beacon, "mode", 2);
+    printf("Adding string\n");
+    blobmsg_add_string(&b_beacon, "ssid", "");
+
+    printf("Invoking beacon report!\n");
+    ubus_invoke(ctx, id, "rrm_beacon_req", b_beacon.head, NULL, NULL, timeout * 1000);
+}
+
+void update_beacon_reports(struct uloop_timeout *t) {
+    printf("Sending beacon report!\n");
+    struct hostapd_sock_entry *sub;
+    list_for_each_entry(sub, &hostapd_sock_list, list)
+    {
+        if (sub->subscribed) {
+            printf("Sending beacon report Sub!\n");
+            send_beacon_reports(sub->bssid_addr, sub->id);
+        }
+    }
+    uloop_timeout_set(&beacon_reports_timer, timeout_config.update_beacon_reports * 1000);
 }
 
 void update_tcp_connections(struct uloop_timeout *t) {
@@ -1397,6 +1527,7 @@ int uci_send_via_network()
     blobmsg_add_u32(&b, "update_hostapd", timeout_config.update_hostapd);
     blobmsg_add_u32(&b, "update_tcp_con", timeout_config.update_tcp_con);
     blobmsg_add_u32(&b, "update_chan_util", timeout_config.update_chan_util);
+    blobmsg_add_u32(&b, "update_beacon_reports", timeout_config.update_beacon_reports);
     blobmsg_close_table(&b, times);
 
     send_blob_attr_via_network(b.head, "uci");
@@ -1448,6 +1579,7 @@ enum {
     UCI_UPDATE_HOSTAPD,
     UCI_UPDATE_TCP_CON,
     UCI_UPDATE_CHAN_UTIL,
+    UCI_UPDATE_BEACON_REPORTS,
     __UCI_TIMES_MAX,
 };
 
@@ -1494,7 +1626,7 @@ static const struct blobmsg_policy uci_times_policy[__UCI_TIMES_MAX] = {
         [UCI_UPDATE_HOSTAPD] = {.name = "update_hostapd", .type = BLOBMSG_TYPE_INT32},
         [UCI_UPDATE_TCP_CON] = {.name = "update_tcp_con", .type = BLOBMSG_TYPE_INT32},
         [UCI_UPDATE_CHAN_UTIL] = {.name = "update_chan_util", .type = BLOBMSG_TYPE_INT32},
-
+        [UCI_UPDATE_BEACON_REPORTS] = {.name = "update_beacon_reports", .type = BLOBMSG_TYPE_INT32},
 };
 
 int handle_uci_config(struct blob_attr *msg) {
@@ -1609,6 +1741,9 @@ int handle_uci_config(struct blob_attr *msg) {
     uci_set_network(cmd_buffer);
 
     sprintf(cmd_buffer, "dawn.@times[0].update_chan_util=%d", blobmsg_get_u32(tb_times[UCI_UPDATE_CHAN_UTIL]));
+    uci_set_network(cmd_buffer);
+
+    sprintf(cmd_buffer, "dawn.@times[0].update_beacon_reports=%d", blobmsg_get_u32(tb_times[UCI_UPDATE_BEACON_REPORTS]));
     uci_set_network(cmd_buffer);
 
     uci_reset();

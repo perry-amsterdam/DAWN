@@ -38,8 +38,6 @@ void remove_old_ap_entries(time_t current_time, long long int threshold);
 
 void print_ap_entry(ap entry);
 
-int probe_array_update_rssi(uint8_t bssid_addr[], uint8_t client_addr[], uint32_t rssi);
-
 int is_connected(uint8_t bssid_addr[], uint8_t client_addr[]);
 
 int is_connected_somehwere(uint8_t client_addr[]);
@@ -88,6 +86,30 @@ void denied_req_array_cb(struct uloop_timeout *t);
 struct uloop_timeout denied_req_timeout = {
         .cb = denied_req_array_cb
 };
+
+void send_beacon_reports(uint8_t bssid[], int id) {
+    pthread_mutex_lock(&client_array_mutex);
+
+    // Seach for BSSID
+    int i;
+    for (i = 0; i <= client_entry_last; i++) {
+        if (mac_is_equal(client_array[i].bssid_addr, bssid)) {
+            break;
+        }
+        printf("Found BSSID\n");
+    }
+
+    // Go threw clients
+    int j;
+    for (j = i; j <= client_entry_last; j++) {
+        if (!mac_is_equal(client_array[j].bssid_addr, bssid)) {
+            break;
+        }
+        printf("Sending Beacon Report for client %d\n",j);
+        ubus_send_beacon_report(client_array[j].client_addr, id);
+    }
+    pthread_mutex_unlock(&client_array_mutex);
+}
 
 int build_hearing_map_sort_client(struct blob_buf *b) {
     print_probe_array();
@@ -148,6 +170,8 @@ int build_hearing_map_sort_client(struct blob_buf *b) {
                 sprintf(ap_mac_buf, MACSTR, MAC2STR(probe_array[k].bssid_addr));
                 ap_list = blobmsg_open_table(b, ap_mac_buf);
                 blobmsg_add_u32(b, "signal", probe_array[k].signal);
+                blobmsg_add_u32(b, "rcpi", probe_array[k].rcpi);
+                blobmsg_add_u32(b, "rsni", probe_array[k].rsni);
                 blobmsg_add_u32(b, "freq", probe_array[k].freq);
                 blobmsg_add_u8(b, "ht_capabilities", probe_array[k].ht_capabilities);
                 blobmsg_add_u8(b, "vht_capabilities", probe_array[k].vht_capabilities);
@@ -431,7 +455,7 @@ void kick_clients(uint8_t bssid[], uint32_t id) {
 
         if (rssi != INT_MIN) {
             pthread_mutex_unlock(&probe_array_mutex);
-            if (!probe_array_update_rssi(client_array[j].bssid_addr, client_array[j].client_addr, rssi)) {
+            if (!probe_array_update_rssi(client_array[j].bssid_addr, client_array[j].client_addr, rssi, true)) {
                 printf("Failed to update rssi!\n");
             } else {
                 printf("Updated rssi: %d\n", rssi);
@@ -700,8 +724,8 @@ int probe_array_set_all_probe_count(uint8_t client_addr[], uint32_t probe_count)
     return updated;
 }
 
-int probe_array_update_rssi(uint8_t bssid_addr[], uint8_t client_addr[], uint32_t rssi) {
-
+int probe_array_update_rssi(uint8_t bssid_addr[], uint8_t client_addr[], uint32_t rssi, int send_network)
+{
     int updated = 0;
 
     if (probe_entry_last == -1) {
@@ -715,7 +739,39 @@ int probe_array_update_rssi(uint8_t bssid_addr[], uint8_t client_addr[], uint32_
             mac_is_equal(client_addr, probe_array[i].client_addr)) {
             probe_array[i].signal = rssi;
             updated = 1;
-            ubus_send_probe_via_network(probe_array[i]);
+            if(send_network)
+            {
+                ubus_send_probe_via_network(probe_array[i]);
+            }
+            break;
+            //TODO: break?!
+        }
+    }
+    pthread_mutex_unlock(&probe_array_mutex);
+
+    return updated;
+}
+
+int probe_array_update_rcpi_rsni(uint8_t bssid_addr[], uint8_t client_addr[], uint32_t rcpi, uint32_t rsni, int send_network)
+{
+    int updated = 0;
+
+    if (probe_entry_last == -1) {
+        return 0;
+    }
+
+
+    pthread_mutex_lock(&probe_array_mutex);
+    for (int i = 0; i <= probe_entry_last; i++) {
+        if (mac_is_equal(bssid_addr, probe_array[i].bssid_addr) &&
+            mac_is_equal(client_addr, probe_array[i].client_addr)) {
+            probe_array[i].rcpi = rcpi;
+            probe_array[i].rsni = rsni;
+            updated = 1;
+            if(send_network)
+            {
+                ubus_send_probe_via_network(probe_array[i]);
+            }
             break;
             //TODO: break?!
         }
@@ -756,7 +812,7 @@ void print_probe_array() {
     printf("------------------\n");
 }
 
-probe_entry insert_to_array(probe_entry entry, int inc_counter) {
+probe_entry insert_to_array(probe_entry entry, int inc_counter, int save_80211k) {
     pthread_mutex_lock(&probe_array_mutex);
 
     entry.time = time(0);
@@ -766,6 +822,12 @@ probe_entry insert_to_array(probe_entry entry, int inc_counter) {
     if (mac_is_equal(entry.bssid_addr, tmp.bssid_addr)
         && mac_is_equal(entry.client_addr, tmp.client_addr)) {
         entry.counter = tmp.counter;
+
+        if(save_80211k)
+        {
+            entry.rcpi = tmp.rcpi;
+            entry.rsni = tmp.rsni;
+        }
     }
 
     if (inc_counter) {
