@@ -74,6 +74,7 @@ struct time_config_s {
     time_t update_tcp_con;
     time_t denied_req_threshold;
     time_t update_chan_util;
+    time_t update_beacon_reports;
 };
 
 struct network_config_s {
@@ -113,6 +114,8 @@ typedef struct probe_entry_s {
     int deny_counter;
     uint8_t max_supp_datarate;
     uint8_t min_supp_datarate;
+    uint32_t rcpi;
+    uint32_t rsni;
 } probe_entry;
 
 typedef struct auth_entry_s {
@@ -148,7 +151,7 @@ struct probe_entry_s probe_array[PROBE_ARRAY_LEN];
 pthread_mutex_t probe_array_mutex;
 
 // ---------------- Functions ----------------
-probe_entry insert_to_array(probe_entry entry, int inc_counter);
+probe_entry insert_to_array(probe_entry entry, int inc_counter, int save_80211k);
 
 void probe_array_insert(probe_entry entry);
 
@@ -226,6 +229,10 @@ int mac_is_greater(uint8_t addr1[], uint8_t addr2[]);
 
 // ---------------- Functions ----------------
 
+int probe_array_update_rssi(uint8_t bssid_addr[], uint8_t client_addr[], uint32_t rssi, int send_network);
+
+int probe_array_update_rcpi_rsni(uint8_t bssid_addr[], uint8_t client_addr[], uint32_t rcpi, uint32_t rsni, int send_network);
+
 void insert_client_to_array(client entry);
 
 void kick_clients(uint8_t bssid[], uint32_t id);
@@ -251,6 +258,8 @@ int build_network_overview(struct blob_buf *b);
 int probe_array_set_all_probe_count(uint8_t client_addr[], uint32_t probe_count);
 
 int ap_get_collision_count(int col_domain);
+
+void send_beacon_reports(uint8_t bssid[], int id);
 
 /* Utils */
 

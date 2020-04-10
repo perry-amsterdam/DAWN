@@ -162,4 +162,6 @@ int send_add_mac(uint8_t *client_addr);
 
 int uci_send_via_network();
 
+void ubus_send_beacon_report(uint8_t client[], int id);
+
 #endif
